@@ -47,9 +47,17 @@ copy_history_entry() {
   [[ $history_index =~ ^[0-9]+$ ]] || exit
   [[ -r $history_path ]] || exit
   entry_json=$(jq -ce --argjson index "$history_index" '
-    .[$index] | select(type == "object" and .type == "text" and (.text | type == "string")) | .text
+    .[$index] | select(type == "object" and .type == "text" and (.text | type == "string"))
+      | {text} + (if .html | type == "string" then {html} else {} end)
   ' "$history_path" 2>/dev/null) || exit
-  jq -rj '.' <<<"$entry_json" | wl-copy
+
+  # A rich text copy goes back as both text/html and plain text, so its links
+  # and formatting survive where the app accepts them. wl-copy offers one type.
+  if jq -e 'has("html")' <<<"$entry_json" >/dev/null; then
+    omarchy-clipboard-copy-rich <<<"$entry_json" || exit
+  else
+    jq -rj '.text' <<<"$entry_json" | wl-copy
+  fi
 }
 
 if [[ -n $history_index ]]; then
